@@ -96,4 +96,4 @@ Referências oficiais usadas na implementação:
 - https://developer.chrome.com/docs/extensions/reference/api/tabCapture
 - https://developer.chrome.com/docs/extensions/reference/api/offscreen
 
-Versão 1.0.0 • Setembro de 2026.
+ Versão 1.0.0 • Setembro de 2026.
