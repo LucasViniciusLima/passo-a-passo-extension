@@ -1,0 +1,38 @@
+PASSO A PASSO - INSTALAÇÃO NO GOOGLE CHROME
+
+1. Extraia o ZIP e guarde a pasta passo-a-passo em um local permanente.
+2. Digite chrome://extensions na barra de endereços do Chrome.
+3. Ative Modo do desenvolvedor, no canto superior direito.
+4. Clique em Carregar sem compactação.
+5. Selecione a pasta passo-a-passo que contém manifest.json.
+6. Clique no quebra-cabeça da barra do Chrome e fixe Passo a Passo.
+
+PARA USAR
+
+Abra o site -> clique na extensão -> dê um título -> Iniciar nesta aba.
+Use o site normalmente. Seus cliques serão registrados.
+Abra a extensão para Pausar, Continuar ou Finalizar.
+Ao finalizar, a revisão abre e o PDF é baixado automaticamente.
+Desmarque a opção de download automático antes de iniciar se preferir
+revisar e cobrir dados antes do primeiro PDF.
+
+A gravação acompanha somente a aba iniciada.
+Os prints mostram a parte visível da página.
+Você pode editar textos, excluir passos, ajustar o círculo e cobrir dados.
+Abra Meus tutoriais para revisar ou exportar novamente.
+
+EXEMPLO-DE-TUTORIAL.pdf mostra como fica o resultado.
+LEIA-ME.md contém detalhes, limitações e solução de problemas.
+
+VALIDAÇÃO DESTA VERSÃO
+
+A lógica foi verificada com testes automatizados usando as APIs do
+Chrome simuladas: início, captura anterior ao clique, isolamento de aba,
+pausa, retomada, finalização, preservação do último clique e falha de
+armazenamento. A geração real do PDF foi executada e as três páginas do
+exemplo foram inspecionadas visualmente.
+
+O ambiente de desenvolvimento impediu a abertura do Chrome de teste.
+A instalação, as permissões de captura, o uso em sites reais e a interface
+completa ainda precisam ser validados no seu Chrome. Use inicialmente
+um site sem dados sensíveis.

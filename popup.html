@@ -1,0 +1,9 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Passo a Passo</title><link rel="stylesheet" href="ui.css"><link rel="stylesheet" href="popup.css"></head><body>
+<header class="brand"><img src="icons/48.png" alt=""><div><strong>Passo a Passo</strong><div class="small muted">Você faz. O tutorial fica pronto.</div></div></header>
+<main>
+  <div class="row top"><span id="status" class="status">Pronto para começar</span><span class="spacer"></span><span class="small muted">v1.0</span></div>
+  <div id="error" class="message" role="alert" hidden></div>
+  <section id="setup"><h1>Seus cliques viram<br>um tutorial.</h1><p class="muted">Cada passo recebe um print e um círculo vermelho no ponto clicado.</p><label>Título do tutorial<input id="title" placeholder="Ex.: Como cadastrar um atendimento" maxlength="100"></label><label class="check"><input type="checkbox" id="autoPdf" checked>Baixar o PDF automaticamente ao finalizar</label><button id="start" class="primary full">● &nbsp; Iniciar nesta aba</button></section>
+  <section id="active" hidden><div class="counter"><strong id="count">0</strong><span>passos registrados</span></div><p id="tabName" class="muted small"></p><div class="actions"><button id="pause">Ⅱ &nbsp; Pausar</button><button id="finish" class="primary">■ &nbsp; Finalizar</button></div><p id="hint" class="small muted">Continue usando a aba. Abra a extensão para pausar ou finalizar.</p></section>
+  <div class="footer-note">Grava apenas a aba escolhida, incluindo a navegação nela. Os prints ficam no seu navegador. Use dados fictícios ou cubra informações na revisão.</div>
+</main><footer><button id="history" class="link">Meus tutoriais ↗</button><span class="small muted">100% local</span></footer><script type="module" src="popup.js"></script></body></html>
