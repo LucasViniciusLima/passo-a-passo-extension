@@ -3,8 +3,17 @@ const video=document.querySelector('video');
 let stream,sessionId,paused=true,count=0,timer,heartbeat,frames=[],slot=0,commits=Promise.resolve();
 const pending=new Map();
 const completed=new Set();
+const submitted=new Map();
 const tell=(type,data={})=>chrome.runtime.sendMessage({target:'background',type,...data}).catch(()=>{});
 const blobOf=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Falha ao criar o print.')),'image/jpeg',0.92));
+async function retry(job){
+  let lastError;
+  for(const delay of [0,180,500]){
+    if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+    try{return await job();}catch(error){lastError=error;}
+  }
+  throw lastError;
+}
 function rememberFrame(){
   if(paused||video.readyState<2||!video.videoWidth)return;
   const scale=Math.min(1,1920/video.videoWidth);
@@ -17,25 +26,28 @@ function rememberFrame(){
 function snapshot(data){
   const before=frames.filter(f=>f.time<=data.time).sort((a,b)=>b.time-a.time)[0];
   // Never silently attach the destination page to an earlier click.
-  if(!before)throw new Error('A tela ainda estava carregando. Aguarde a imagem estabilizar e tente novamente.');
+  if(!before)throw new Error('Não havia um print anterior a este clique. O restante da gravação foi mantido.');
   const copy=document.createElement('canvas');copy.width=before.canvas.width;copy.height=before.canvas.height;
   copy.getContext('2d').drawImage(before.canvas,0,0);
-  return {image:blobOf(copy),width:copy.width,height:copy.height,frameAgeMs:Math.max(0,data.time-before.time)};
+  // Encode/retry the SAME frozen image, never the page after navigation. Resolve
+  // errors as values so an uncommitted pointerdown cannot reject unhandled.
+  const image=retry(()=>blobOf(copy)).then(blob=>({blob}),error=>({error})).finally(()=>{copy.width=copy.height=1;});
+  return {image,width:copy.width,height:copy.height,frameAgeMs:Math.max(0,data.time-before.time)};
 }
 async function prepare(data){
   if(paused||!sessionId)return;
+  if(pending.has(data.id)||submitted.has(data.id)||completed.has(data.id))return;
   const shot=snapshot(data);
   pending.set(data.id,{...shot,data,createdAt:Date.now()});
   for(const [key,value] of pending){if(Date.now()-value.createdAt>30000||pending.size>30)pending.delete(key);}
 }
-async function commit(data){
-  if(paused||!sessionId||completed.has(data.id))return;
-  let shot=pending.get(data.id);
-  if(!shot)shot={...snapshot(data),data};
-  pending.delete(data.id);
+async function commit(data,shot){
+  if(shot.error)throw shot.error;
   const source=shot.data;
-  const step={id:crypto.randomUUID(),sessionId,order:count,title:String(data.title||source.title||'Clique no local destacado.').slice(0,180),notes:'',createdAt:Date.now(),site:String(source.site||'').slice(0,250),pageTitle:String(source.pageTitle||'').slice(0,200),x:Math.min(1,Math.max(0,source.x)),y:Math.min(1,Math.max(0,source.y)),radius:24,viewportWidth:source.viewportWidth,width:shot.width,height:shot.height,image:await shot.image,masks:[],frameAgeMs:shot.frameAgeMs};
-  await put('steps',step);count++;completed.add(data.id);
+  const {blob,error}=await shot.image;if(error)throw error;
+  const step={id:crypto.randomUUID(),sessionId,order:count,title:String(data.title||source.title||'Clique no local destacado.').slice(0,180),notes:'',createdAt:Date.now(),site:String(source.site||'').slice(0,250),pageTitle:String(source.pageTitle||'').slice(0,200),x:Math.min(1,Math.max(0,source.x)),y:Math.min(1,Math.max(0,source.y)),radius:24,viewportWidth:source.viewportWidth,width:shot.width,height:shot.height,image:blob,masks:[],frameAgeMs:shot.frameAgeMs};
+  // A retry always uses the same key and payload, preventing duplicate steps.
+  await retry(()=>put('steps',step));count++;
   tell('STEP_SAVED',{sessionId,count});
 }
 async function waitForFrame(){
@@ -50,7 +62,7 @@ async function stop(){
   paused=true;clearInterval(timer);clearInterval(heartbeat);
   await commits.catch(()=>{});
   for(const track of stream?.getTracks()||[]){track.onended=null;track.stop();}
-  stream=null;video.srcObject=null;frames=[];pending.clear();completed.clear();sessionId=null;
+  stream=null;video.srcObject=null;frames=[];pending.clear();completed.clear();submitted.clear();sessionId=null;
 }
 async function handle(msg){
   switch(msg.type){
@@ -63,7 +75,15 @@ async function handle(msg){
       heartbeat=setInterval(()=>tell('HEARTBEAT'),20000);return;
     case 'PREPARE':return prepare(msg.data);
     case 'COMMIT':{
-      const job=commits.then(()=>commit(msg.data));commits=job.catch(()=>{});return job;
+      const data=msg.data;
+      if(paused||!sessionId||completed.has(data.id))return;
+      if(submitted.has(data.id))return submitted.get(data.id);
+      // Freeze the click's image now, before earlier disk writes finish.
+      let shot=pending.get(data.id);
+      if(!shot){try{shot={...snapshot(data),data};}catch(error){shot={error};}}
+      pending.delete(data.id);
+      const job=commits.then(()=>commit(data,shot)).finally(()=>{submitted.delete(data.id);completed.add(data.id);});
+      submitted.set(data.id,job);commits=job.catch(()=>{});return job;
     }
     case 'PAUSE':paused=true;pending.clear();frames=[];slot=0;return;
     case 'RESUME':paused=false;await waitForFrame();return;

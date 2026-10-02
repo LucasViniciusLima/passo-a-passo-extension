@@ -2,19 +2,34 @@ import {get, put, listSteps} from './lib/db.js';
 const EMPTY={status:'idle',count:0};
 let controlQueue=Promise.resolve();
 let eventQueue=Promise.resolve();
+let stateQueue=Promise.resolve();
 const state=async()=> (await chrome.storage.session.get('recording')).recording || {...EMPTY};
 const off=async(type,data={})=>{
   const result=await chrome.runtime.sendMessage({target:'offscreen',type,...data});
   if(!result?.ok) throw new Error(result?.error || 'O gravador não respondeu.');
   return result;
 };
-async function writeState(s) {
-  await chrome.storage.session.set({recording:s});
-  const text=s.status==='recording'?String(s.count||0):s.status==='paused'?'Ⅱ':'';
-  await chrome.action.setBadgeText({text});
-  await chrome.action.setBadgeBackgroundColor({color:s.status==='paused'?'#b45309':'#dd334e'});
-  if(s.tabId) await chrome.tabs.sendMessage(s.tabId,{type:'RECORDING_STATE',state:s}).catch(()=>{});
-  return s;
+function writeState(update) {
+  // Capture events and controls may complete together. Merge against the latest
+  // state so a saved/skipped step can never undo a manual pause or finalization.
+  const task=stateQueue.then(async()=>{
+    const s=typeof update==='function'?update(await state()):update;
+    await chrome.storage.session.set({recording:s});
+    const text=s.status==='recording'?String(s.count||0):s.status==='paused'?'Ⅱ':'';
+    await chrome.action.setBadgeText({text});
+    await chrome.action.setBadgeBackgroundColor({color:s.status==='paused'?'#b45309':'#dd334e'});
+    // A busy page must not block the recorder's control/state queue.
+    if(s.tabId)chrome.tabs.sendMessage(s.tabId,{type:'RECORDING_STATE',state:s}).catch(()=>{});
+    return s;
+  });
+  stateQueue=task.catch(()=>{});return task;
+}
+async function reportMissedStep(accepted,data,error){
+  return writeState(s=>{
+    if(s.id!==accepted.id||s.captureIssues?.some(item=>item.id===data.id))return s;
+    const issue={id:data.id,time:data.time||Date.now(),title:String(data.title||'Clique no local destacado.').slice(0,180),reason:String(error.message||error).slice(0,300)};
+    return {...s,missedCount:(s.missedCount||0)+1,captureIssues:[...(s.captureIssues||[]).slice(-49),issue]};
+  });
 }
 async function ensureOffscreen(){
   if(!(await chrome.runtime.getContexts({contextTypes:['OFFSCREEN_DOCUMENT']})).length){
@@ -37,7 +52,7 @@ async function start(msg){
   if(/^https:\/\/(chromewebstore\.google\.com|chrome\.google\.com\/webstore)/i.test(tab.url)) throw new Error('O Chrome impede a gravação de cliques na loja de extensões. Abra outro site.');
   await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},files:['content.js']});
   const session={id:crypto.randomUUID(),title:(msg.title||'Meu tutorial').trim().slice(0,100)||'Meu tutorial',createdAt:Date.now(),status:'recording'};
-  let s={status:'starting',id:session.id,token:crypto.randomUUID(),tabId:tab.id,tabTitle:tab.title||'Aba escolhida',count:0,autoPdf:msg.autoPdf!==false};
+  let s={status:'starting',id:session.id,token:crypto.randomUUID(),tabId:tab.id,tabTitle:tab.title||'Aba escolhida',count:0,missedCount:0,captureIssues:[],autoPdf:msg.autoPdf!==false};
   await writeState(s);
   try{
     await ensureOffscreen();
@@ -56,22 +71,30 @@ async function start(msg){
 async function pause(){
   const s=await checkedState();
   if(!['recording','paused'].includes(s.status)) return s;
-  await eventQueue;
   const paused=s.status==='recording';
+  if(paused){
+    // Stop accepting new clicks immediately, while preserving those in flight.
+    await writeState(current=>({...current,status:'paused',error:null}));
+    await eventQueue;
+  }
   await off(paused?'PAUSE':'RESUME');
-  return writeState({...await state(),status:paused?'paused':'recording',error:null});
+  return writeState(current=>({...current,status:paused?'paused':'recording',error:null}));
 }
 async function finalize(open=true,reason=''){
   let s=await state();
   if(!s.id || !['recording','paused','starting','finishing'].includes(s.status)) return s;
   // Stop accepting new events, then drain every already accepted click.
-  await writeState({...s,status:'finishing'});
+  await writeState(current=>({...current,status:'finishing'}));
   await eventQueue;
   await off('STOP').catch(()=>{});
+  await stateQueue;s=await state();
   const session=await get('sessions',s.id);
-  if(session) await put('sessions',{...session,status:reason?'interrupted':'finished',finishedAt:Date.now()});
+  let metadataError='';
+  try{
+    if(session)await put('sessions',{...session,status:reason?'interrupted':'finished',finishedAt:Date.now(),missedCount:s.missedCount||0,captureIssues:s.captureIssues||[]});
+  }catch(error){metadataError='A captura foi encerrada, mas não foi possível guardar o resumo dos avisos. Revise agora os passos já salvos. '+error.message;}
   const steps=await listSteps(s.id);
-  s={...s,status:'finished',count:steps.length,error:reason||null};
+  s={...s,status:'finished',count:steps.length,error:reason||metadataError||null};
   await writeState(s);
   await chrome.offscreen.closeDocument().catch(()=>{});
   if(open) await chrome.tabs.create({url:chrome.runtime.getURL(`editor.html?id=${encodeURIComponent(s.id)}${s.autoPdf&&steps.length?'&auto=1':''}`)});
@@ -97,17 +120,22 @@ chrome.runtime.onMessage.addListener((msg,sender,respond)=>{
   let task;
   if(['PREPARE','COMMIT'].includes(msg.type)){
     const acceptedState=state();
-    task=eventQueue.then(async()=>{
+    task=(async()=>{
       const s=await acceptedState;
       if(s.status!=='recording'||sender.tab?.id!==s.tabId||msg.token!==s.token) return {};
-      if(!msg.data||!Number.isFinite(msg.data.x)||!Number.isFinite(msg.data.y))return {};
-      return off(msg.type,{data:msg.data});
-    });
-    eventQueue=task.catch(()=>{});
+      if(!msg.data||typeof msg.data.id!=='string'||!Number.isFinite(msg.data.x)||!Number.isFinite(msg.data.y))return {};
+      try{return await off(msg.type,{data:msg.data});}
+      catch(error){
+        if(msg.type==='COMMIT')await reportMissedStep(s,msg.data,error);
+        throw error;
+      }
+    })();
+    // Send captures immediately. IndexedDB writes are ordered in offscreen.js;
+    // waiting for them here used to lose pre-click images on busy pages.
+    eventQueue=Promise.allSettled([eventQueue,task]).then(()=>{});
   }else if(msg.type==='STEP_SAVED'){
     if(sender.url!==chrome.runtime.getURL('offscreen.html'))return;
-    task=controlQueue.then(async()=>{const s=await state();if(s.id===msg.sessionId)await writeState({...s,count:Math.max(s.count||0,msg.count)});return {};});
-    controlQueue=task.catch(()=>{});
+    task=writeState(s=>s.id===msg.sessionId?{...s,count:Math.max(s.count||0,msg.count)}:s).then(()=>({}));
   }else if(msg.type==='CAPTURE_ENDED'){
     if(sender.url!==chrome.runtime.getURL('offscreen.html'))return;
     task=controlQueue.then(()=>finalize(false,'A captura foi interrompida. Abra Meus tutoriais para recuperar os passos.'));
@@ -118,19 +146,12 @@ chrome.runtime.onMessage.addListener((msg,sender,respond)=>{
     task=controlQueue.then(()=>handleControl(msg,sender));
     controlQueue=task.catch(()=>{});
   }
-  task.then(result=>respond({ok:true,...result})).catch(async error=>{
-    if(msg.type==='COMMIT'){
-      const s=await state();
-      await off('PAUSE').catch(()=>{});
-      await writeState({...s,status:'paused',error:'Um passo não foi salvo: '+error.message});
-    }
-    respond({ok:false,error:error.message});
-  });
+  task.then(result=>respond({ok:true,...result})).catch(error=>respond({ok:false,error:error.message}));
   return true;
 });
 chrome.commands.onCommand.addListener(command=>{
   controlQueue=controlQueue.then(()=>command==='toggle-pause'?pause():command==='finish'?finalize():null).catch(async error=>{
-    await writeState({...await state(),error:error.message});
+    await writeState(s=>({...s,error:error.message}));
   });
 });
 chrome.tabs.onRemoved.addListener(tabId=>{

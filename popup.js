@@ -9,6 +9,8 @@ function render(s){
   $('count').textContent=s.count||0;$('tabName').textContent=s.tabTitle||'';
   $('pause').textContent=s.status==='paused'?'▶  Continuar':'Ⅱ  Pausar';
   $('hint').textContent=s.status==='paused'?'Nenhum passo será registrado até você continuar.':'Continue usando a aba. Abra a extensão para pausar ou finalizar.';
+  $('captureWarning').hidden=!s.missedCount;
+  if(s.missedCount)$('captureWarning').textContent=`${s.missedCount} ${s.missedCount===1?'clique não foi salvo':'cliques não foram salvos'}. ${s.status==='recording'?'A gravação continua. ':''}Confira os detalhes na revisão ao finalizar.`;
   if(s.error){$('error').textContent=s.error;$('error').hidden=false;}
   for(const id of ['start','pause','finish'])$(id).disabled=busy||['starting','finishing'].includes(s.status);
 }

@@ -21,18 +21,77 @@ Os prints mostram a parte visível da página.
 Você pode editar textos, excluir passos, ajustar o círculo e cobrir dados.
 Abra Meus tutoriais para revisar ou exportar novamente.
 
-EXEMPLO-DE-TUTORIAL.pdf mostra como fica o resultado.
+PARA EXPORTAR GIF OU VÍDEO
+
+1. Finalize a gravação e confira os passos na revisão.
+2. Na seção "Exporte também como GIF ou vídeo", escolha o tempo
+   por passo, a transição e a resolução.
+3. Clique em Baixar GIF ou Baixar vídeo e mantenha a aba aberta.
+4. Ao terminar, salve o arquivo e confira a prévia.
+
+O vídeo usa MP4 quando disponível ou WebM no modo automático.
+Ambos exibem o texto dos passos, prints, círculos vermelhos e
+transições suaves. As coberturas de dados também são respeitadas.
+A opção Baixar PDF e o PDF automático ao finalizar continuam presentes.
+
+ADICIONAR UM ÍCONE ÀS PÁGINAS DO PDF (1.2)
+
+Abra um tutorial no editor. Em Ícone do PDF, clique em Selecionar imagem.
+Escolha um PNG, JPG ou WebP de até 5 MB. A prévia aparece ao lado.
+Clique em Baixar PDF: o ícone será colocado no canto superior direito
+de todas as páginas. A imagem fica salva apenas nesse tutorial.
+Use Trocar imagem ou Remover quando quiser. PNG transparente é aceito.
+Gere novamente o PDF após trocar ou remover a imagem.
+
+EXEMPLO-COM-ICONE.pdf demonstra como fica o cabeçalho.
+
+ESCOLHER AS CORES DO PDF (1.3)
+
+Abra um tutorial. Na seção Cores do PDF, clique nas amostras de cor:
+- Cor principal: faixa superior e destaques.
+- Quadro do passo: retângulo com o número PASSO.
+- Margem e moldura: borda do print e linha do rodapé.
+- Fundo da página: background da folha ao redor do print.
+
+Confira a prévia e clique em Baixar PDF para gerar o arquivo atualizado.
+As cores ficam salvas por tutorial. Restaurar cores padrão volta ao
+verde e ao fundo branco, mantendo o ícone e as opções de GIF/vídeo.
+Você pode continuar trocando a imagem em Ícone do PDF.
+O texto se ajusta para continuar legível em fundos claros e escuros.
+As cores originais dos prints e as marcações vermelhas são mantidas.
+
+EXEMPLO-CORES-PERSONALIZADAS.pdf demonstra a personalização.
+
+CORREÇÃO DAS PAUSAS AUTOMÁTICAS (1.1.1)
+
+Páginas lentas e falhas em um passo não pausam mais a gravação.
+Falhas temporárias recebem até três tentativas. Se não for possível
+recuperar o passo, aparece um aviso; a gravação continua. Ao finalizar,
+confira na revisão os cliques que não entraram no tutorial.
+O botão Pausar e o atalho continuam disponíveis para pausa manual.
+
+ATUALIZAR SEM PERDER TUTORIAIS
+
+Finalize qualquer gravação e feche a aba de edição. Copie os novos
+arquivos para a MESMA pasta já instalada, substituindo os antigos.
+Clique em Recarregar em chrome://extensions e recarregue as páginas.
+Não desinstale a extensão: isso pode apagar os tutoriais salvos.
+
+EXEMPLO-DE-TUTORIAL.pdf, .gif e .mp4 demonstram os resultados.
 LEIA-ME.md contém detalhes, limitações e solução de problemas.
 
 VALIDAÇÃO DESTA VERSÃO
 
-A lógica foi verificada com testes automatizados usando as APIs do
-Chrome simuladas: início, captura anterior ao clique, isolamento de aba,
-pausa, retomada, finalização, preservação do último clique e falha de
-armazenamento. A geração real do PDF foi executada e as três páginas do
-exemplo foram inspecionadas visualmente.
+Os testes automatizados cobriram gravação com APIs simuladas,
+PDF automático/manual, tutoriais antigos, GIF/vídeo, configurações
+e cancelamento. A correção 1.1.1 foi verificada com atrasos e falhas
+simuladas de captura/salvamento, incluindo pausa manual e finalização
+com tentativas em andamento. Arquivos GIF, MP4 e WebM foram gerados e
+verificados; para testar o vídeo foram usados codificadores de
+software, no lugar dos codificadores nativos do navegador.
 
 O ambiente de desenvolvimento impediu a abertura do Chrome de teste.
-A instalação, as permissões de captura, o uso em sites reais e a interface
-completa ainda precisam ser validados no seu Chrome. Use inicialmente
-um site sem dados sensíveis.
+A instalação, a captura em sites reais, a interface e a codificação
+nativa ainda precisam ser conferidas no seu Chrome.
+
+Versão 1.3.0
